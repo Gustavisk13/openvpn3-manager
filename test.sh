@@ -12,6 +12,7 @@ redEcho() {
 }
 
 deletePlaceHolder() {
+    return 0
     if [[ -f $HOME/.local/share/vpnHelper/vpnHelper-placeholder.conf ]]; then
         rm -rf $HOME/.local/share/vpnHelper/vpnHelper-placeholder.conf
     fi
@@ -20,6 +21,26 @@ deletePlaceHolder() {
 createPlaceHolder() {
     if [[ ! -f $HOME/.local/share/vpnHelper/vpnHelper-placeholder.conf ]]; then
         touch $HOME/.local/share/vpnHelper/vpnHelper-placeholder.conf
+    fi
+}
+
+validateVpnName() {
+    vpnName=$1
+    vpn=$2
+    option=$3
+
+    if [ "$option" == "exists" ]; then
+        if grep -q "$vpn=" $HOME/.local/share/vpnHelper/vpnHelper.conf; then
+            return 0
+        else
+            return 1
+        fi
+    elif [ "$option" == "rename" ]; then
+        if grep -q "=$vpnName" $HOME/.local/share/vpnHelper/vpnHelper.conf; then
+            return 0
+        else
+            return 1
+        fi
     fi
 }
 
@@ -34,7 +55,41 @@ setupVpn() {
     fi
 
     if [ "$setupOption" == "all" ]; then
-        echo "$vpns"
+        read -p "Do you wish to rename the VPNs? (y/n) " rename
+        if [ "$rename" == "y" ]; then
+            for vpn in $vpns; do
+                if validateVpnName $vpn $name "exists"; then
+                    redEcho "A custom name for $vpn already exists! Do you wish to overwrite it? (y/n)" overwrite
+                    if [ "$overwrite" == "n" ]; then
+                        continue
+                    fi
+                fi
+
+                read -p "Enter a name for $vpn: " name
+
+                if [ -z "$name" ]; then
+                    redEcho "Name cannot be empty!"
+                    continue
+                fi
+
+                if validateVpnName $name; then
+                    redEcho "A VPN with the name $name already exists! Do you wish to overwrite it? (y/n)" overwrite
+                    if [ "$overwrite" == "n" ]; then
+                        continue
+                    fi
+                    sed -i "/$name/d" $HOME/.local/share/vpnHelper/vpnHelper.conf
+                else
+                    echo "$vpn=$name" >>$HOME/.local/share/vpnHelper/vpnHelper.conf
+
+                fi
+
+            done
+
+        else
+            for vpn in $vpns; do
+                echo "$vpn=$vpn" >>$HOME/.local/share/vpnHelper/vpnHelper.conf
+            done
+        fi
     elif [ "$setupOption" == "single" ]; then
         echo "Setup a single VPN"
     fi
