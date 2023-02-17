@@ -237,5 +237,4 @@ if [ "$first_run" == "true" ]; then
 
     manageVpn
 
-
 fi
