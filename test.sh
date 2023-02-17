@@ -44,6 +44,97 @@ validateVpnName() {
     fi
 }
 
+hasCustomVpnName() {
+    vpn=$1
+    if grep -q "$vpn=" $HOME/.local/share/vpnHelper/vpnHelper.conf; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+manageVpnNames() {
+    vpns=$1
+    nameOption=$2
+
+    if [ "$nameOption" == "all" ]; then
+        read -p "Do you wish to rename all VPNs? (y/n) " rename
+        if [[ "$rename" == "y" || "$rename" == "Y" ]]; then
+
+            for vpn in $vpns; do
+                if hasCustomVpnName $vpn; then
+                    yellowEcho "VPN $vpn already has a custom name"
+                    read -p "Do you wish to rename it? (y/n) " renameVpn
+                    if [[ "$renameVpn" == "y" || "$renameVpn" == "Y" ]]; then
+                        while true; do
+                            read -p "Enter a new name for $vpn: " vpnName
+                            validateVpnName $vpnName $vpn "rename"
+                            if [ $? -eq 0 ]; then
+                                redEcho "A VPN with the name $vpnName already exists!"
+                            else
+                                sed -i "s/$vpn=.*/$vpn=$vpnName/g" $HOME/.local/share/vpnHelper/vpnHelper.conf
+                                break
+                            fi
+                        done
+                    fi
+                else
+                    read -p "Enter a name for $vpn: " vpnName
+                    while true; do
+                        validateVpnName $vpnName $vpn "rename"
+                        if [ $? -eq 0 ]; then
+                            redEcho "A VPN with the name $vpnName already exists!"
+                            read -p "Enter a new name for $vpn: " vpnName
+                        else
+                            break
+                        fi
+                    done
+                    echo "$vpn=$vpnName" >>$HOME/.local/share/vpnHelper/vpnHelper.conf
+                fi
+            done
+
+        else
+            for vpn in $vpns; do
+                echo "$vpn=$vpn" >>$HOME/.local/share/vpnHelper/vpnHelper.conf
+            done
+        fi
+    elif [ "$nameOption" == "single" ]; then
+        yellowEcho "Choose a VPN to rename:"
+        select vpn in $vpns; do
+            if hasCustomVpnName $vpn; then
+                yellowEcho "VPN $vpn already has a custom name"
+                read -p "Do you wish to rename it? (y/n) " renameVpn
+                if [[ "$renameVpn" == "y" || "$renameVpn" == "Y" ]]; then
+                    while true; do
+                        read -p "Enter a new name for $vpn: " vpnName
+                        validateVpnName $vpnName $vpn "rename"
+                        if [ $? -eq 0 ]; then
+                            redEcho "A VPN with the name $vpnName already exists!"
+                        else
+                            sed -i "s/$vpn=.*/$vpn=$vpnName/g" $HOME/.local/share/vpnHelper/vpnHelper.conf
+                            break
+                        fi
+                    done
+                fi
+            else
+                read -p "Enter a name for $vpn: " vpnName
+                while true; do
+                    validateVpnName $vpnName $vpn "rename"
+                    if [ $? -eq 0 ]; then
+                        redEcho "A VPN with the name $vpnName already exists!"
+                        read -p "Enter a new name for $vpn: " vpnName
+                    else
+                        break
+                    fi
+                done
+                echo "$vpn=$vpnName" >>$HOME/.local/share/vpnHelper/vpnHelper.conf
+            fi
+            break
+        done
+
+    fi
+
+}
+
 setupVpn() {
     setupOption=$1
     vpns=$(find . -maxdepth 2 -type f -name "*.ovpn" -exec basename {} \; | sed 's/.ovpn//g')
@@ -54,57 +145,59 @@ setupVpn() {
         exit
     fi
 
-    if [ "$setupOption" == "all" ]; then
-        read -p "Do you wish to rename the VPNs? (y/n) " rename
-        if [ "$rename" == "y" ]; then
-            for vpn in $vpns; do
-                if validateVpnName $vpn $name "exists"; then
-                    redEcho "A custom name for $vpn already exists! Do you wish to overwrite it? (y/n)" overwrite
-                    if [ "$overwrite" == "n" ]; then
-                        continue
-                    fi
-                fi
+    case $setupOption in
+    "rename")
+        yellowEcho "You can rename your VPNs to make them easier to identify"
 
-                read -p "Enter a name for $vpn: " name
+        select opt in "Rename all VPNs" "Rename a single VPN" "Skip configuration" "Return" "Quit"; do
+            case $opt in
+            "Rename all VPNs")
+                manageVpnNames "$vpns" "all"
+                break
+                ;;
+            "Rename a single VPN")
+                manageVpnNames "$vpns" "single"
+                break
+                ;;
+            "Skip configuration")
+                for vpn in $vpns; do
+                    echo "$vpn=$vpn" >>$HOME/.local/share/vpnHelper/vpnHelper.conf
+                done
+                break
+                ;;
+            "Return")
+                manageVpn
+                break
+                ;;
+            "Quit")
+                echo "We're done"
+                exit
+                ;;
+            *)
+                echo "Invalid option"
+                ;;
+            esac
+        done
+        ;;
 
-                if [ -z "$name" ]; then
-                    redEcho "Name cannot be empty!"
-                    continue
-                fi
-
-                if validateVpnName $name; then
-                    redEcho "A VPN with the name $name already exists! Do you wish to overwrite it? (y/n)" overwrite
-                    if [ "$overwrite" == "n" ]; then
-                        continue
-                    fi
-                    sed -i "/$name/d" $HOME/.local/share/vpnHelper/vpnHelper.conf
-                else
-                    echo "$vpn=$name" >>$HOME/.local/share/vpnHelper/vpnHelper.conf
-
-                fi
-
-            done
-
-        else
-            for vpn in $vpns; do
-                echo "$vpn=$vpn" >>$HOME/.local/share/vpnHelper/vpnHelper.conf
-            done
-        fi
-    elif [ "$setupOption" == "single" ]; then
-        echo "Setup a single VPN"
-    fi
+    esac
 }
 
 manageVpn() {
-    select opt in "Setup all VPNs" "Setup a single VPN" "Quit"; do
+    select opt in "Rename VPNs" "Setup credentials" "Skip configuration" "Quit"; do
         case $opt in
-        "Setup all VPNs")
-            setup="all"
+        "Rename VPNs")
+            setupVpn "rename"
             deletePlaceHolder
             break
             ;;
-        "Setup a single VPN")
-            setup="single"
+        "Setup credentials")
+            setupVpn "credentials"
+            deletePlaceHolder
+            break
+            ;;
+        "Skip configuration")
+            setupVpn "skip"
             deletePlaceHolder
             break
             ;;
@@ -140,10 +233,9 @@ first_run=$(grep -oP '(?<=first_run=).+' $HOME/.local/share/vpnHelper/vpnHelper.
 
 if [ "$first_run" == "true" ]; then
     yellowEcho "Welcome to vpnHelper!"
-    yellowEcho "Please select one of the following options:"
+    yellowEcho "Do "
 
     manageVpn
 
-    setupVpn $setup
 
 fi
