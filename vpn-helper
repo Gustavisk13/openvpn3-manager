@@ -2,28 +2,29 @@
 
 vpnPath="vpn"
 
-checkVpnDir() {
-    fullVpnPath="$(pwd)/$vpnPath"
+dir="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 
-    if [ -n "$(find $fullVpnPath -maxdepth 0 -type d -empty 2>/dev/null)" ]; then
+checkVpnDir() {
+
+    if [ -n "$(find "$dir/vpn" -maxdepth 2 -type d -empty 2>/dev/null)" ]; then
         echo "VPN directory is empty"
         exit
     fi
 
     #check for .ovpn files
-    if [ ! -n "$(find $fullVpnPath -maxdepth 1 -type f -name '*.ovpn' 2>/dev/null)" ]; then
+    if [ ! -n "$(find $dir -maxdepth 2 -type f -name '*.ovpn' 2>/dev/null)" ]; then
         echo "No .ovpn files found"
         exit
     fi
 }
 
 checkConfigFile() {
-    if [ ! -f "user.settings" ]; then
+    if [ ! -f "$dir/user.settings" ]; then
         echo "Config file not found"
         exit
     fi
 
-    if [ ! -s "user.settings" ]; then
+    if [ ! -s "$dir/user.settings" ]; then
         echo "Config file is empty"
         echo "Try running with --setup"
         exit
@@ -43,15 +44,15 @@ setupConfig() {
 }
 
 createConfigFile() {
-    if [ ! -f "user.settings" ]; then
-        touch user.settings
+    if [ ! -f "$dir/user.settings" ]; then
+        touch $dir/user.settings
     fi
 }
 
 readConfigFile() {
     while IFS= read -r line; do
         echo "$line"
-    done <user.settings
+    done <$dir/user.settings
 }
 
 storeName() {
@@ -60,11 +61,11 @@ storeName() {
 
     name="$vpnName=$vpnPath"
 
-    if [ -n "$(grep $vpnName user.settings)" ]; then
+    if [ -n "$(grep $vpnName $dir/user.settings)" ]; then
         return
     fi
 
-    echo $name >>user.settings
+    echo $name >>$dir/user.settings
 }
 
 changeName() {
@@ -72,7 +73,7 @@ changeName() {
     newName=$2
 
     echo "Changing $oldName to $newName"
-    sed -i "0,/$oldName/s/$oldName/$newName/" user.settings
+    sed -i "0,/$oldName/s/$oldName/$newName/" $dir/user.settings
 }
 
 readDir() {
@@ -80,7 +81,7 @@ readDir() {
 
     for file in $vpnPath/*.ovpn; do
         vpnName=$(basename $file .ovpn)
-        storeName $vpnName "$(pwd)/$vpnPath/$vpnName.ovpn"
+        storeName $vpnName "$dir/vpn/$vpnName.ovpn"
     done
 }
 
@@ -147,7 +148,7 @@ if [ "$1" == "--setup" ]; then
 
     checkVpnDir
 
-    readDir $vpnPath
+    readDir "$dir/$vpnPath"
 
     vpns=$(readConfigFile)
 
@@ -177,7 +178,7 @@ checkConfigFile
 
 PS3="Select a VPN: "
 
-vpnNames=$(cut -d "=" -f1 user.settings)
+vpnNames=$(cut -d "=" -f1 $dir/user.settings)
 
 select vpnOpt in $vpnNames; do
     case $vpnOpt in
