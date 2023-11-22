@@ -232,7 +232,11 @@ if [ "$1" == "--setup" ]; then
         vpnName=$(echo $vpn | cut -d "=" -f1)
         vpnPath=$(echo $vpn | cut -d "=" -f2)
 
-        setupConfig $vpnName $vpnPath
+        if [ ! -z "$name" ]; then
+            setupConfig $name $vpnPath
+        else
+            setupConfig $vpnName $vpnPath
+        fi
     done
 fi
 
