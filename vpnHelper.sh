@@ -20,6 +20,7 @@ checkVpnDir() {
 checkOpenVpn() {
     if [ -z "$(which openvpn3)" ]; then
         echo "OpenVPN3 is not installed"
+        echo "Check https://openvpn.net/cloud-docs/owner/connectors/connector-user-guides/openvpn-3-client-for-linux.html"
         exit
     fi
 }
