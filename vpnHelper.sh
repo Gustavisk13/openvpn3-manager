@@ -3,16 +3,29 @@
 vpnPath="vpn"
 
 checkVpnDir() {
-    if [ -n "$(find vpn -maxdepth 0 -type d -empty 2>/dev/null)" ]; then
+    fullVpnPath="$(pwd)/$vpnPath"
+
+    if [ -n "$(find $fullVpnPath -maxdepth 0 -type d -empty 2>/dev/null)" ]; then
         echo "VPN directory is empty"
         exit
     fi
 
     #check for .ovpn files
-    if [ -n "$(find vpn -maxdepth 1 -type f -name '*.ovpn' 2>/dev/null)" ]; then
-        return
-    else
-        echo "VPN directory does not contain .ovpn files"
+    if [ ! -n "$(find $fullVpnPath -maxdepth 1 -type f -name '*.ovpn' 2>/dev/null)" ]; then
+        echo "No .ovpn files found"
+        exit
+    fi
+}
+
+checkConfigFile() {
+    if [ ! -f "user.settings" ]; then
+        echo "Config file not found"
+        exit
+    fi
+
+    if [ ! -s "user.settings" ]; then
+        echo "Config file is empty"
+        echo "Try running with --setup"
         exit
     fi
 }
@@ -160,6 +173,7 @@ if [ "$1" == "--setup" ]; then
 fi
 
 checkVpnDir
+checkConfigFile
 
 PS3="Select a VPN: "
 
