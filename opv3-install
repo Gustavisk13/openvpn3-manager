@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Step 1: Install OpenVPN repository key
+sudo mkdir -p /etc/apt/keyrings && curl -fsSL https://packages.openvpn.net/packages-repo.gpg | sudo tee /etc/apt/keyrings/openvpn.asc
+
+# Step 2: Detect OS distribution
+DISTRO=$(lsb_release -c | awk '{print $2}')
+
+# Step 3: Add OpenVPN repository
+echo "deb [signed-by=/etc/apt/keyrings/openvpn.asc] https://packages.openvpn.net/openvpn3/debian $DISTRO main" | sudo tee /etc/apt/sources.list.d/openvpn-packages.list
+
+# Step 4: Update the package list
+sudo apt update
+
+# Step 5: Install OpenVPN 3 package
+sudo apt install openvpn3
