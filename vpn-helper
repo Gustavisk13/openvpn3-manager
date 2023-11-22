@@ -18,6 +18,11 @@ yellowEcho() {
 
 checkVpnDir() {
 
+    #check if vpn directory exists
+    if [ ! -d "$dir/vpn" ]; then
+        mkdir $dir/vpn
+    fi
+
     if [ -n "$(find "$dir/vpn" -maxdepth 2 -type d -empty 2>/dev/null)" ]; then
         redEcho "VPN directory is empty"
         exit
