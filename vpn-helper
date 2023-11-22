@@ -20,8 +20,7 @@ checkVpnDir() {
 
 checkConfigFile() {
     if [ ! -f "$dir/user.settings" ]; then
-        echo "Config file not found"
-        exit
+        touch $dir/user.settings
     fi
 
     if [ ! -s "$dir/user.settings" ]; then
@@ -141,7 +140,51 @@ menu() {
     done
 }
 
+create_alias() {
+    current_user=$(whoami)
+    shell=$(grep "^$USER" /etc/passwd | grep -o zsh)
+    if [[ "$OSTYPE" == "msys" ]]; then
+
+        echo "alias vpn=\"$1\"" >>C:\\Users\\$current_user\\.bashrc
+
+    else
+        if [[ "$shell" = "zsh" ]]; then
+            if [ ! -n "$(grep "alias vpn" /home/$current_user/.zshrc)" ]; then
+                sed -i "/Example aliases/a alias vpn=\"$1\"" /home/$current_user/.zshrc
+            else
+                echo "VPN Helper already installed"
+                exit
+            fi
+        elif [[ "$shell" = "bash" ]]; then
+            if [ ! -n "$(grep "alias vpn" /home/$current_user/.bashrc)" ]; then
+                sed -i "/bash-doc package/a alias vpn=\"$1\"" /home/$current_user/.bashrc
+            else
+                echo "VPN Helper already installed"
+                exit
+            fi
+        fi
+    fi
+}
+
 checkOpenVpn
+
+if [ "$1" == "--install" ]; then
+    create_alias "$dir/vpn-helper"
+    if [ $? -eq 0 ]; then
+        echo "VPN Helper installed"
+        echo "Restart your terminal or run 'source ~/.bashrc' or 'source ~/.zshrc'"
+    fi
+    exit
+fi
+
+if [ "$1" == "--help" ]; then
+    echo "Usage: vpn-helper [OPTION]"
+    echo "Options:"
+    echo "  --install   Install VPN Helper"
+    echo "  --setup     Setup VPN Helper"
+    echo "  --help      Display this help and exit"
+    exit
+fi
 
 if [ "$1" == "--setup" ]; then
     createConfigFile
