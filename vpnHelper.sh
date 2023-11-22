@@ -17,6 +17,13 @@ checkVpnDir() {
     fi
 }
 
+checkOpenVpn() {
+    if [ -z "$(which openvpn3)" ]; then
+        echo "OpenVPN3 is not installed"
+        exit
+    fi
+}
+
 setupConfig() {
     openvpn3 config-import --c $2 --name $1
 }
@@ -118,6 +125,8 @@ menu() {
         esac
     done
 }
+
+checkOpenVpn
 
 if [ "$1" == "--setup" ]; then
     createConfigFile
