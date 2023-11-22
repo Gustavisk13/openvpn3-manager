@@ -18,7 +18,7 @@ Access to a terminal with root privileges.
 Clone the repository and run the install script:
 
 ```bash
-git clone
+git clone https://github.com/Gustavisk13/openvpn3-manager.git
 cd openvpn3-manager
 ./vpn-helper --install
 ```
