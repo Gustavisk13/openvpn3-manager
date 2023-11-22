@@ -1,4 +1,4 @@
-# openvpn3-manager
+# OpenVPN3 Manager
 
 A shell that manages via CLI menu helpful commands while working with openvpn3. Allowing to create, delete, list, connect, disconnect, etc. VPNs.
 The script is currently working with the latest version of openvpn3.
