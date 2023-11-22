@@ -26,6 +26,8 @@ cd openvpn3-manager
 This will create a alias to the script in your rc file.
 The alias is `vpn`.
 
+Place your ovpn files in the `vpn` folder.
+
 ## Usage
 
 ```bash
