@@ -59,7 +59,7 @@ checkOpenVpn() {
 }
 
 setupConfig() {
-    openvpn3 config-import --c $2 --name $1
+    openvpn3 config-import --persistent --c $2 --name $1
 }
 
 createConfigFile() {
