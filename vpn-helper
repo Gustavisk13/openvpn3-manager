@@ -176,10 +176,15 @@ create_alias() {
                 exit
             fi
         elif [[ "$shell" = "bash" ]]; then
-            if [ ! -n "$(grep "alias vpn" /home/$current_user/.bashrc)" ]; then
-                # sed -i "/bash-doc package/a alias vpn=\"$1\"" /home/$current_user/.bashrc
-                echo "alias vpn=\"$1\"" >>/home/$current_user/.bashrc
 
+            #check for bash_aliases file if not create it
+
+            if [ ! -f "/home/$current_user/.bash_aliases" ]; then
+                touch /home/$current_user/.bash_aliases
+            fi
+
+            if [ ! -n "$(grep "alias vpn" /home/$current_user/.bash_aliases)" ]; then
+                sed -i "/Example aliases/a alias vpn=\"$1\"" /home/$current_user/.bash_aliases
             else
                 redEcho "VPN Helper already installed"
                 exit
