@@ -3,17 +3,21 @@
 vpnPath="vpn"
 
 dir="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+credentials_dir="$HOME/.local/share/openvpn3"
 
 greenEcho() {
     echo -e "\033[32m$1\033[0m"
+    echo ""
 }
 
 redEcho() {
     echo -e "\033[31m$1\033[0m"
+    echo ""
 }
 
 yellowEcho() {
     echo -e "\033[33m$1\033[0m"
+    echo ""
 }
 
 checkVpnDir() {
@@ -45,6 +49,12 @@ checkConfigFile() {
         yellowEcho "Try running with --setup"
         exit
     fi
+
+    if [ ! -n "$(grep ".ovpn" $dir/user.settings)" ]; then
+        redEcho "Config file is empty"
+        yellowEcho "Try running with --setup"
+        exit
+    fi
 }
 
 checkOpenVpn() {
@@ -59,7 +69,7 @@ checkOpenVpn() {
 }
 
 setupConfig() {
-    openvpn3 config-import --persistent --c $2 --name $1
+    openvpn3 config-import --persistent --c $2 --name $1 >/dev/null 2>&1
 }
 
 createConfigFile() {
@@ -91,6 +101,14 @@ changeName() {
     oldName=$1
     newName=$2
 
+    if [ -z "$newName" ]; then
+        return
+    fi
+
+    if [ -z "$(grep $oldName $dir/user.settings)" ]; then
+        return
+    fi
+
     yellowEcho "Changing $oldName to $newName"
     sed -i "0,/$oldName/s/$oldName/$newName/" $dir/user.settings
 }
@@ -101,7 +119,82 @@ readDir() {
     for file in $vpnPath/*.ovpn; do
         vpnName=$(basename $file .ovpn)
         storeName $vpnName "$dir/vpn/$vpnName.ovpn"
+        if [ $? -eq 0 ]; then
+            greenEcho "Added $vpnName"
+        fi
     done
+}
+
+disconnectAll() {
+    session_paths=$(openvpn3 sessions-list | grep -oP '(?<=Path: ).*')
+    while IFS= read -r line; do
+        openvpn3 session-manage --path $line -D >/dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            greenEcho "Disconnected $line"
+        fi
+    done <<<"$session_paths"
+}
+
+start_session() {
+
+    vpnName=$1
+
+    has_credentials
+    if [ $? -eq 1 ]; then
+        openvpn3 session-start -c $vpnName
+    fi
+
+    username=$(grep "USERNAME" $credentials_dir/credentials | cut -d "=" -f2)
+    password=$(grep "PASSWORD" $credentials_dir/credentials | cut -d "=" -f2)
+
+    openvpn3 session-start -c $vpnName <<EOF >/dev/null 2>&1
+$username
+$password
+EOF
+    if [ $? -eq 0 ]; then
+        greenEcho "Connected to $vpnName"
+    else
+        redEcho "Failed to connect to $vpnName"
+    fi
+
+}
+
+checkConfigurations() {
+    has_configs=$(openvpn3 configs-list --verbose | grep "/net/openvpn/v3/configuration/")
+    if [ ! -z "$has_configs" ]; then
+        return 1
+    fi
+}
+
+clearConfigurations() {
+    vpnNames=$(cut -d "=" -f1 $dir/user.settings)
+
+    configs=$(openvpn3 configs-list --verbose)
+
+    # Define the regex pattern for date and time
+    pattern="^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}"
+
+    result=$(echo "$configs" | grep -B 1 -A 1 -E "$pattern")
+
+    config_ids=()
+    text_below_date=$(echo "$result" | grep -v -E "$pattern")
+
+    while IFS= read -r line; do
+        read -r sub_result <<<$(echo "$line" | awk 'NR==1{print $0}')
+        pat="/net/openvpn/v3/configuration/"
+        if [[ $sub_result =~ $pat ]]; then
+            config_ids+=($sub_result)
+        fi
+
+    done <<<"$result"
+    for config in "${config_ids[@]}"; do
+        echo "YES" | openvpn3 config-remove --path $config >/dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            greenEcho "Removed $config"
+        fi
+    done
+
+    disconnectAll
 }
 
 vpnService() {
@@ -110,10 +203,14 @@ vpnService() {
 
     case $vpnAction in
     "connect")
-        openvpn3 session-start -c $vpnName
+        start_session $vpnName
+        # openvpn3 session-start -c $vpnName
         ;;
     "disconnect")
         openvpn3 session-manage -c $vpnName -D
+        ;;
+    "disconnect-all")
+        disconnectAll
         ;;
     "list")
         openvpn3 sessions-list
@@ -128,10 +225,66 @@ vpnService() {
 
 }
 
+has_credentials() {
+    if [ ! -s "$credentials_dir/credentials" ]; then
+        return 1
+    fi
+}
+
+manage_credentials() {
+
+    read -p "Do you want to save your credentials? (y/n): " save_credentials
+
+    if [[ $save_credentials == "n" || $save_credentials == "N" ]]; then
+        return
+    fi
+
+    if [ ! -d "$credentials_dir" ]; then
+        mkdir -p $credentials_dir
+    fi
+
+    if [ ! -f "$credentials_dir/credentials" ]; then
+        touch $credentials_dir/credentials
+    fi
+
+    if [ ! -s "$credentials_dir/credentials" ]; then
+        while [ -z "$username" ]; do
+            read -p "Enter your username: " username
+        done
+
+        while [ -z "$password" ]; do
+            echo -n "Enter your password: "
+            read -s password
+        done
+
+        echo "USERNAME=$username" >>$credentials_dir/credentials
+        echo "PASSWORD=$password" >>$credentials_dir/credentials
+    else
+        yellowEcho "You already have credentials saved"
+        read -p "Do you want to change your credentials? (y/n): " change_credentials
+        if [[ $change_credentials == "y" || $change_credentials == "Y" ]]; then
+            rm $credentials_dir/credentials
+            touch $credentials_dir/credentials
+            while [ -z "$username" ]; do
+                read -p "Enter your username: " username
+            done
+
+            while [ -z "$password" ]; do
+                echo -n "Enter your password: "
+                read -s password
+            done
+
+            echo "USERNAME=$username" >>$credentials_dir/credentials
+            echo "PASSWORD=$password" >>$credentials_dir/credentials
+        fi
+    fi
+    echo ""
+}
+
 menu() {
     vpn=$1
     PS3=$'\e[1;32mSelect an option: \e[0m'
-    select opt in Connect Disconnect List Status Quit; do
+    select opt in Connect Disconnect "Disconnect All" List Status Quit; do
         case $opt in
         "Connect")
             vpnService $vpn "connect"
@@ -139,6 +292,10 @@ menu() {
             ;;
         "Disconnect")
             vpnService $vpn "disconnect"
+            break
+            ;;
+        "Disconnect All")
+            vpnService $vpn "disconnect-all"
             break
             ;;
         "List")
@@ -162,20 +319,21 @@ menu() {
 
 create_alias() {
     current_user=$(whoami)
-    shell=$(grep "^$USER" /etc/passwd | grep -o zsh)
+    #get the current shell from the ps command
+    current_shell=$(ps -p $$ | awk '{print $4}' | tail -n 1)
     if [[ "$OSTYPE" == "msys" ]]; then
 
         echo "alias vpn=\"$1\"" >>C:\\Users\\$current_user\\.bashrc
 
     else
-        if [[ "$shell" = "zsh" ]]; then
+        if [[ "$current_shell" = "zsh" ]]; then
             if [ ! -n "$(grep "alias vpn" /home/$current_user/.zshrc)" ]; then
                 sed -i "/Example aliases/a alias vpn=\"$1\"" /home/$current_user/.zshrc
             else
                 redEcho "VPN Helper already installed"
                 exit
             fi
-        elif [[ "$shell" = "bash" ]]; then
+        elif [[ "$current_shell" = "bash" ]]; then
 
             #check for bash_aliases file if not create it
 
@@ -214,6 +372,12 @@ if [ "$1" == "--help" ]; then
     exit
 fi
 
+if [ "$1" == "--clear" ]; then
+    clearConfigurations
+    echo "" >$dir/user.settings
+    exit
+fi
+
 if [ "$1" == "--setup" ]; then
     createConfigFile
 
@@ -222,6 +386,14 @@ if [ "$1" == "--setup" ]; then
     readDir "$dir/$vpnPath"
 
     vpns=$(readConfigFile)
+
+    checkConfigurations
+    if [ $? -eq 1 ]; then
+        read -p "You have existing configurations. Do you want to clear them? (y/n): " clearConfigs
+        if [[ $clearConfigs == "y" || $clearConfigs == "Y" ]]; then
+            clearConfigurations
+        fi
+    fi
 
     read -p "Do you want to name your VPNs? (y/n): " nameVpns
 
@@ -236,16 +408,17 @@ if [ "$1" == "--setup" ]; then
         done
     fi
 
+    vpns=()
+    vpns=$(readConfigFile)
+
     for vpn in $vpns; do
         vpnName=$(echo $vpn | cut -d "=" -f1)
         vpnPath=$(echo $vpn | cut -d "=" -f2)
 
-        if [ ! -z "$name" ]; then
-            setupConfig $name $vpnPath
-        else
-            setupConfig $vpnName $vpnPath
-        fi
+        setupConfig $vpnName $vpnPath
     done
+    manage_credentials
+
 fi
 
 checkVpnDir
